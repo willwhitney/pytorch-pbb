@@ -121,7 +121,7 @@ class Net(nn.Module):
         x = self.l2(x)
         x = F.relu(x)
         x = self.l3(x)
-        F.relu(x)
+        x = F.relu(x)
         x = self.lout(x)
         return self.output_transform(x)
 
