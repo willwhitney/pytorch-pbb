@@ -32,37 +32,37 @@ def kl_to_prior(means, sigmas, prior_means, prior_sigmas):
 
 def f_quad(empirical_risk,
            means, sigmas, prior_means, prior_sigmas,
-           delta=(1-0.95), n=60000):
+           delta=(1 - 0.95), n=60000):
     kl, _, _ = kl_to_prior(means, sigmas, prior_means, prior_sigmas)
     kl_ratio = (kl + np.log(2 * np.sqrt(n) / delta)) / (2 * n)
     return ((empirical_risk + kl_ratio)**0.5 + (kl_ratio)**0.5)**2
 
 
 def dziugaite(empirical_risk, means, sigmas, prior_means, prior_sigmas,
-              delta=(1-0.95), n=60000):
+              delta=(1 - 0.95), n=60000):
     kl, _, _ = kl_to_prior(means, sigmas, prior_means, prior_sigmas)
     gap = ((kl + math.log(n / delta)) / (2 * (n - 1))) ** 0.5
     return empirical_risk + gap, kl
 
 
 def KLdiv(pbar, p):
-    return pbar * np.log(pbar/p) + (1-pbar) * np.log((1-pbar)/(1-p))
+    return pbar * np.log(pbar / p) + (1 - pbar) * np.log((1 - pbar) / (1 - p))
 
 
 def KLdiv_prime(pbar, p):
-    return (1-pbar)/(1-p) - pbar/p
+    return (1 - pbar) / (1 - p) - pbar / p
 
 
 def Newt(p, q, c):
-    newp = p - (KLdiv(q, p) - c)/KLdiv_prime(q, p)
+    newp = p - (KLdiv(q, p) - c) / KLdiv_prime(q, p)
     return newp
 
 
 def approximate_BPAC(train_accur, B_init, niter=5):
     """Input B_init should be (KL + log_term) / n"""
     B_RE = 2 * B_init ** 2
-    A = 1-train_accur
-    B_next = B_init+A
+    A = 1 - train_accur
+    B_next = B_init + A
     if B_next > 1.0:
         return 1.0
     for i in range(niter):

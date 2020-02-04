@@ -1,14 +1,10 @@
 import argparse
 import numpy as np
-import math
 import random
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-import torch.distributions as td
 import torch.optim as optim
-from torchvision import datasets, transforms
-import torchvision
+from torchvision import transforms
 
 import mnist_dataset
 import models
@@ -125,7 +121,7 @@ def train_lagrangian(model, lambda_param, train_loader, optimizer, lambda_optimi
         mean_log_loss += log_loss.item()
         mean_lambda_loss += lambda_loss
         samples += len(data)
-    accuracy = correct / samples
+    # accuracy = correct / samples
     batch_idx += 1
 
     # logging
@@ -169,8 +165,6 @@ def eval_noisy(model, eval_loader, prior_means, prior_sigmas, name, length):
     pbb_bound = bounds.f_quad(test_risk, means, sigmas, prior_means, prior_sigmas, n=length)
     kl, mean_term, sigma_term = bounds.kl_to_prior(means, sigmas, prior_means, prior_sigmas)
 
-    flat_sigmas = torch.cat([p.flatten() for p in model.get_sigmas()], 0)
-    flat_prior_sigmas = torch.cat([p.flatten() for p in prior_sigmas], 0)
     return ('{} set: Error: {}/{} ({:.0f}%), Log loss: {:.6f}, Dziugaite bound: {:.6f}, PBB bound: {:.6f}, '
             'KL: {:.6f}, Mean term: {:.6f}, Sigma term: {:.6f}').format(
         name,

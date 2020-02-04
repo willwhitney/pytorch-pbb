@@ -51,7 +51,7 @@ class GaussianLinear(nn.Module):
         init_rho = np.log(np.exp(init_sigma) - 1.0)
 
         # Weight parameters
-        sigma_weights = 1/np.sqrt(in_features)
+        sigma_weights = 1 / np.sqrt(in_features)
         threshold = 2 * sigma_weights
 
         mu_tensor = torch.Tensor(out_features, in_features)
@@ -96,7 +96,7 @@ class PerSampleGaussianLinear(nn.Module):
         init_rho = np.log(np.exp(init_sigma) - 1.0)
 
         # Weight parameters
-        sigma_weights = 1/np.sqrt(in_features)
+        sigma_weights = 1 / np.sqrt(in_features)
         threshold = 2 * sigma_weights
         mu_tensor = torch.Tensor(out_features, in_features)
         trunc_normal_(mu_tensor, 0, sigma_weights, -threshold, threshold)
@@ -149,7 +149,7 @@ class NoisyNet(nn.Module):
         if self.clipping == 'relu':
             x = F.relu(x + 10) - 10
         elif self.clipping == 'tanh':
-            x = F.tanh(x/6) * 6
+            x = F.tanh(x / 6) * 6
         elif self.clipping == 'hard':
             pass
         elif self.clipping == 'none':
@@ -214,10 +214,10 @@ class Lagrangian(nn.Module):
         else:
             init_param = math.log(math.exp(init_value + 1e-5) - 1)
 
-        self.l = nn.Parameter(torch.tensor(init_param).float())
+        self.lam = nn.Parameter(torch.tensor(init_param).float())
 
     def forward(self, *args):
-        return F.softplus(self.l)
+        return F.softplus(self.lam)
 
 
 class SupervisedReprNet(nn.Module):
