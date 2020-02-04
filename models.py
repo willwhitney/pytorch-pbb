@@ -5,7 +5,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributions as td
 
-from .truncnormal import trunc_normal_
+# make the import work when running the main file in this package
+# or when importing the whole package
+try:
+    from .truncnormal import trunc_normal_
+except ImportError:
+    from truncnormal import trunc_normal_
 
 
 class Gaussian(object):
