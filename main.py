@@ -12,7 +12,6 @@ import torchvision
 
 import mnist_dataset
 import models
-import cifar_supervised_repr
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--no-cuda', action='store_true', default=False,
