@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributions as td
 
-from truncnormal import trunc_normal_
+from .truncnormal import trunc_normal_
 
 
 class Gaussian(object):
