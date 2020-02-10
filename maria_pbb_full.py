@@ -6,16 +6,23 @@ import torch.nn.functional as F
 import torch.optim as optim
 import ipdb
 import torch.distributions as td
-
-
 from torchvision import datasets, transforms
 from torchvision.utils import make_grid
-from tqdm import tqdm, trange
+
+# make the import work when running the main file in this package
+# or when importing the whole package
+try:
+    from .truncnormal import trunc_normal_
+    from .dataset_utils import DatasetCache
+except ImportError:
+    from truncnormal import trunc_normal_
+    from dataset_utils import DatasetCache
+
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #DEVICE = "cpu"
 
-LOADER_KWARGS = {'num_workers': 1,
+LOADER_KWARGS = {'num_workers': 0,
                  'pin_memory': True} if torch.cuda.is_available() else {}
 
 # print(torch.cuda.is_available())
@@ -29,14 +36,14 @@ transform = transforms.Compose(
      ])
 
 train_loader = torch.utils.data.DataLoader(
-    datasets.MNIST(
+    DatasetCache(datasets.MNIST(
         'mnist-data/', train=True, download=True,
-        transform=transform),
+        transform=transform)),
     batch_size=BATCH_SIZE, shuffle=True, **LOADER_KWARGS)
 test_loader = torch.utils.data.DataLoader(
-    datasets.MNIST(
+    DatasetCache(datasets.MNIST(
         'mnist-data/', train=False, download=True,
-        transform=transform),
+        transform=transform)),
     batch_size=BATCH_SIZE, shuffle=True, **LOADER_KWARGS)
 
 
@@ -109,7 +116,7 @@ class ProbLinear(nn.Module):
         # Initialise Q weight means with truncated normal,
         # initialise Q weight scales from RHO_PRIOR
         # check tensorflow truncated normal initialisation
-        weights_mu_init = nn.init.trunc_normal_(torch.Tensor(
+        weights_mu_init = trunc_normal_(torch.Tensor(
             out_features, in_features), 0, sigma_weights, -2*sigma_weights, 2*sigma_weights)
         weights_rho_init = torch.ones(out_features, in_features) * RHO_PRIOR
         self.weight = Gaussian(weights_mu_init.clone(),
@@ -193,6 +200,17 @@ class ProbNetwork(nn.Module):
         loss = torch.pow(first_term + second_term, 2)
         return loss,  kl_div/TRAIN_SIZE, outputs, cross_entropy
 
+    def fquad_1_0(self, risk):
+        # we compute the KL divergence between Q and Q_0
+        kl_div = self.compute_kl()
+        repeated_kl_ratio = torch.div(
+            kl_div + np.log((2*np.sqrt(TRAIN_SIZE))/DELTA), 2*TRAIN_SIZE)
+        first_term = torch.sqrt(risk + repeated_kl_ratio)
+        second_term = torch.sqrt(repeated_kl_ratio)
+        # compute training objective
+        risk_bound = torch.pow(first_term + second_term, 2)
+        return risk_bound
+
 
 net = ProbNetwork().to(DEVICE)
 
@@ -201,7 +219,7 @@ def train(net, optimizer, epoch):
     # train and report training metrics
     net.train()
     total, correct, avgbound, avgkl, avgloss = 0.0, 0.0, 0.0, 0.0, 0.0
-    for batch_id, (data, target) in enumerate(tqdm(train_loader)):
+    for batch_id, (data, target) in enumerate(train_loader):
         data, target = data.to(DEVICE), target.to(DEVICE)
         net.zero_grad()
         bound, kl, output, loss = net.fquad(data, target)
@@ -217,6 +235,25 @@ def train(net, optimizer, epoch):
     print(f"-Epoch {epoch :.5f}, RUB: {avgbound/batch_id :.5f}, KL/n: {avgkl/batch_id :.5f}, Train loss: {avgloss/batch_id :.5f}, Train Acc:  {correct/total * 100:.5f}")
 
 
+def compute_full_bound():
+    cross_entropy, correct, total = 0.0, 0.0, 0.0
+    with torch.no_grad():
+        for batch_id, (data, target) in enumerate(train_loader):
+            data, target = data.to(DEVICE), target.to(DEVICE)
+            bound, kl, output, loss = net.fquad(data, target)
+            cross_entropy += loss
+            pred = output.max(1, keepdim=True)[1]
+            correct += pred.eq(target.view_as(pred)).sum().item()
+            total += target.size(0)
+
+    cross_entropy /= batch_id
+    surrogate_bound = net.fquad_1_0(cross_entropy)
+    accuracy = correct / total
+    risk_bound = net.fquad_1_0(1 - accuracy)
+    print(
+        f"Train accuracy: {accuracy :.4f}, Bound: {risk_bound :.4f}, Surrogate bound: {surrogate_bound :.4f}")
+
+
 def test():
     # compute posterior mean test accuracy
     net.eval()
@@ -230,9 +267,11 @@ def test():
     print('Posterior Mean Test Accuracy: {}/{}'.format(correct, TEST_SIZE))
 
 
-# set optimiser, train and output test accuracy every 10 epochs
-optimizer = optim.SGD(net.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM)
-for epoch in trange(TRAIN_EPOCHS):
-    train(net, optimizer, epoch)
-    if ((epoch+1) % 10 == 0):
-        test()
+if __name__ == '__main__':
+    # set optimiser, train and output test accuracy every 10 epochs
+    optimizer = optim.SGD(net.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM)
+    for epoch in range(TRAIN_EPOCHS):
+        train(net, optimizer, epoch)
+        compute_full_bound()
+        if ((epoch+1) % 10 == 0):
+            test()

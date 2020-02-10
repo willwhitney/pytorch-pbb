@@ -49,7 +49,7 @@ def train_noisy(model, train_loader, optimizer, epoch, prior_means, prior_sigmas
 
         # calculate loss
         output = model(data)
-        pred_err = F.nll_loss(output, target)
+        pred_err = (1 / (-np.log(model.PMIN))) * F.nll_loss(output, target)
         mean_pred_err += pred_err.item()
 
         means = model.get_means()
