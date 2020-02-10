@@ -1,6 +1,7 @@
 import torch
 import math
 import numpy as np
+import torch.distributions as td
 
 
 def kl_to_prior(means, sigmas, prior_means, prior_sigmas):
@@ -28,6 +29,36 @@ def kl_to_prior(means, sigmas, prior_means, prior_sigmas):
     kl = 0.5 * (mu_term + sigma_term)
 
     return kl, 0.5 * mu_term, 0.5 * sigma_term
+
+
+def td_kl_to_prior(means, sigmas, prior_means, prior_sigmas):
+    means = torch.cat([m.flatten() for m in means])
+    prior_means = torch.cat([m.flatten() for m in prior_means])
+
+    sigmas = torch.cat([s.flatten() for s in sigmas])
+    prior_sigmas = torch.cat([s.flatten() for s in prior_sigmas])
+
+    q = td.MultivariateNormal(means, torch.diag(sigmas))
+    p = td.MultivariateNormal(prior_means, torch.diag(sigmas))
+    return td.kl_divergence(q, p).sum(), torch.tensor(0.), torch.tensor(0.)
+
+
+def maria_kl_to_prior(means, sigmas, prior_means, prior_sigmas):
+    means = torch.cat([m.flatten() for m in means])
+    prior_means = torch.cat([m.flatten() for m in prior_means])
+    sigmas = torch.cat([s.flatten() for s in sigmas])
+    prior_sigmas = torch.cat([s.flatten() for s in prior_sigmas])
+
+    var1 = sigmas ** 2
+    var0 = prior_sigmas ** 2
+
+    aux1 = torch.log(torch.div(var0, var1))
+    aux2 = torch.div(
+        torch.pow(means - prior_means, 2), var0)
+    aux3 = torch.div(var1, var0)
+    kl_div = torch.mul(aux1 + aux2 + aux3 - 1, 0.5).sum()
+
+    return kl_div, torch.tensor(0.), torch.tensor(0.)
 
 
 def f_quad(empirical_risk,

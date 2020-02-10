@@ -54,6 +54,7 @@ class GaussianLinear(nn.Module):
         sigma_weights = 1 / np.sqrt(in_features)
         threshold = 2 * sigma_weights
 
+        # mu_tensor = torch.Tensor(out_features, in_features).normal_(0, sigma_weights)
         mu_tensor = torch.Tensor(out_features, in_features)
         trunc_normal_(mu_tensor, 0, sigma_weights, -threshold, threshold)
         self.weight_mu = nn.Parameter(mu_tensor)
@@ -101,8 +102,7 @@ class PerSampleGaussianLinear(nn.Module):
         mu_tensor = torch.Tensor(out_features, in_features)
         trunc_normal_(mu_tensor, 0, sigma_weights, -threshold, threshold)
         self.weight_mu = nn.Parameter(mu_tensor)
-        self.weight_rho = nn.Parameter(
-            torch.ones_like(self.weight_mu) * init_rho)
+        self.weight_rho = nn.Parameter(torch.ones_like(self.weight_mu) * init_rho)
         self.weight = Gaussian(self.weight_mu, self.weight_rho)
 
         # Bias parameters
@@ -129,20 +129,21 @@ class PerSampleGaussianLinear(nn.Module):
 
 
 class NoisyNet(nn.Module):
-    def __init__(self, init_sigma, clipping='tanh', per_sample=False, PMIN=1e-3):
+    def __init__(self, init_sigma, clipping='tanh', per_sample=False,
+                 PMIN=1e-3, n_inputs=784, n_outputs=10):
         super().__init__()
         self.clipping = clipping
         self.PMIN = PMIN
         if per_sample:
-            self.l1 = PerSampleGaussianLinear(784, 600, init_sigma)
+            self.l1 = PerSampleGaussianLinear(n_inputs, 600, init_sigma)
             self.l2 = PerSampleGaussianLinear(600, 600, init_sigma)
             self.l3 = PerSampleGaussianLinear(600, 600, init_sigma)
-            self.lout = PerSampleGaussianLinear(600, 10, init_sigma)
+            self.lout = PerSampleGaussianLinear(600, n_outputs, init_sigma)
         else:
-            self.l1 = GaussianLinear(784, 600, init_sigma)
+            self.l1 = GaussianLinear(n_inputs, 600, init_sigma)
             self.l2 = GaussianLinear(600, 600, init_sigma)
             self.l3 = GaussianLinear(600, 600, init_sigma)
-            self.lout = GaussianLinear(600, 10, init_sigma)
+            self.lout = GaussianLinear(600, n_outputs, init_sigma)
 
     def output_transform(self, x):
         # lower bound output prob
@@ -187,16 +188,6 @@ class NoisyNet(nn.Module):
 
 
 class SmallNoisyNet(NoisyNet):
-    def __init__(self, init_sigma, per_sample=False, *args, **kwargs):
-        super().__init__(init_sigma, per_sample=per_sample, *args, **kwargs)
-        if per_sample:
-            self.l1 = PerSampleGaussianLinear(784, 500, init_sigma)
-            self.lout = PerSampleGaussianLinear(500, 10, init_sigma)
-        else:
-            self.l1 = GaussianLinear(784, 500, init_sigma)
-            self.lout = GaussianLinear(500, 10, init_sigma)
-
-    # @profile
     def forward(self, x):
         x = torch.flatten(x, 1, -1)
 
@@ -204,6 +195,35 @@ class SmallNoisyNet(NoisyNet):
         x = F.relu(x)
         x = self.lout(x)
         return self.output_transform(x)
+
+
+class TinyNoisyNet(NoisyNet):
+    def __init__(self, init_sigma, clipping='tanh', per_sample=False,
+                 PMIN=1e-3, n_inputs=784, n_outputs=10):
+        super().__init__(init_sigma, clipping, per_sample, PMIN, n_inputs, n_outputs)
+        if per_sample:
+            self.l1 = PerSampleGaussianLinear(n_inputs, 10, init_sigma)
+            self.lout = PerSampleGaussianLinear(10, n_outputs, init_sigma)
+        else:
+            self.l1 = GaussianLinear(n_inputs, 10, init_sigma)
+            self.lout = GaussianLinear(10, n_outputs, init_sigma)
+
+    def forward(self, x):
+        x = torch.flatten(x, 1, -1)
+
+        x = self.l1(x)
+        x = F.relu(x)
+        x = self.lout(x)
+        return self.output_transform(x)
+
+
+class SmallRegressionNoisyNet(NoisyNet):
+    def forward(self, x):
+        x = torch.flatten(x, 1, -1)
+
+        x = self.l1(x)
+        x = F.relu(x)
+        return self.lout(x)
 
 
 class Lagrangian(nn.Module):

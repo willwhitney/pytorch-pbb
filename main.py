@@ -56,6 +56,10 @@ def train_noisy(model, train_loader, optimizer, epoch, prior_means, prior_sigmas
         sigmas = model.get_sigmas()
 
         bound = compute_bound(pred_err, means, sigmas)
+        # kl = bounds.kl_to_prior(means, sigmas, prior_means, prior_sigmas)[0]
+        # print(pred_err.item(), kl.item())
+        # # if kl.item() > 1000:
+        # import ipdb; ipdb.set_trace()
 
         # take step
         optimizer.zero_grad()
@@ -71,7 +75,8 @@ def train_noisy(model, train_loader, optimizer, epoch, prior_means, prior_sigmas
         epoch, batch_idx, optimizer.param_groups[0]['lr'], mean_pred_err, avg_surr_bound)
 
 
-def train_lagrangian(model, lambda_param, train_loader, optimizer, lambda_optimizer, epoch, prior_means, prior_sigmas, max_error=0.1):
+def train_lagrangian(model, lambda_param, train_loader, optimizer,
+                     lambda_optimizer, epoch, prior_means, prior_sigmas, max_error=0.1):
     model.train()
 
     def main_loss(log_loss, means, sigmas):
@@ -129,8 +134,12 @@ def train_lagrangian(model, lambda_param, train_loader, optimizer, lambda_optimi
     mean_lambda_loss /= batch_idx
     means = model.get_means()
     sigmas = model.get_sigmas()
-    return 'Train Epoch: {} Batch: {} \t LR: {:.3e} \t Log loss: {:.6f}\t Lambda: {:.6f}\t Lambda loss: {:.6f}'.format(
-        epoch, batch_idx, optimizer.param_groups[0]['lr'], mean_log_loss, lambda_param().item(), mean_lambda_loss)
+    surrogate_pbb_bound = bounds.f_quad(
+        mean_log_loss, means, sigmas, prior_means, prior_sigmas)
+    return ('Train Epoch: {} Batch: {} \t LR: {:.3e} \t Log loss: {:.6f}\t '
+            'Lambda: {:.6f}\t Lambda loss: {:.6f}\t Surrogate PBB bound: {:.6f}').format(
+        epoch, batch_idx, optimizer.param_groups[0]['lr'], mean_log_loss,
+        lambda_param().item(), mean_lambda_loss, surrogate_pbb_bound)
 
 
 def eval_noisy(model, eval_loader, prior_means, prior_sigmas, name, length):
@@ -165,11 +174,13 @@ def eval_noisy(model, eval_loader, prior_means, prior_sigmas, name, length):
     pbb_bound = bounds.f_quad(test_risk, means, sigmas, prior_means, prior_sigmas, n=length)
     kl, mean_term, sigma_term = bounds.kl_to_prior(means, sigmas, prior_means, prior_sigmas)
 
+    # print("Means distance: {:.4e}, ")
+
     return ('{} set: Error: {}/{} ({:.0f}%), Log loss: {:.6f}, Dziugaite bound: {:.6f}, PBB bound: {:.6f}, '
             'KL: {:.6f}, Mean term: {:.6f}, Sigma term: {:.6f}').format(
         name,
-        incorrect, samples, 100. * incorrect /
-        samples, test_loss.item(), dz_bound.item(), pbb_bound.item(),
+        incorrect, samples, 100. * incorrect / samples,
+        test_loss.item(), dz_bound.item(), pbb_bound.item(),
         kl, mean_term, sigma_term)
 
 
@@ -191,10 +202,14 @@ test_loader = torch.utils.data.DataLoader(
 
 prior_sigma = 3e-2
 
-# lambda_param = models.Lagrangian(1e-1).to(DEVICE)
-# lambda_optimizer = optim.SGD(lambda_param.parameters(), lr=1e-2)
+lambda_param = models.Lagrangian(1e-1).to(DEVICE)
+lambda_optimizer = optim.SGD(lambda_param.parameters(), lr=1e-2)
 model = models.NoisyNet(prior_sigma, per_sample=False,
                         clipping='hard').to(DEVICE)
+# model = models.SmallNoisyNet(prior_sigma, per_sample=False,
+#                              clipping='hard').to(DEVICE)
+# model = models.TinyNoisyNet(prior_sigma, per_sample=False,
+#                             clipping='hard').to(DEVICE)
 
 prior_means = [p.clone().detach() for p in model.get_means()]
 prior_sigmas = [p.clone().detach() for p in model.get_sigmas()]
@@ -204,10 +219,8 @@ optimizer = optim.SGD(model.parameters(), lr=5e-3, momentum=0.95)
 # optimizer = optim.Adam(model.parameters(), lr=1e-3, amsgrad=True)
 # scheduler = StepLR(optimizer, step_size=100, gamma=0.3)
 
-train_eval_str = eval_noisy(
-    model, train_loader, prior_means, prior_sigmas, "Train", args.ntrain)
-test_eval_str = eval_noisy(
-    model, test_loader, prior_means, prior_sigmas, "Test", 10000)
+train_eval_str = eval_noisy(model, train_loader, prior_means, prior_sigmas, "Train", args.ntrain)
+test_eval_str = eval_noisy(model, test_loader, prior_means, prior_sigmas, "Test", 10000)
 print(train_eval_str)
 print(test_eval_str)
 print()
@@ -215,6 +228,9 @@ print()
 for epoch in range(0, 10000):
     train_str = train_noisy(model, train_loader, optimizer,
                             epoch, prior_means, prior_sigmas, objective='pbb')
+    # train_str = train_lagrangian(model, lambda_param, train_loader, optimizer,
+    #                              lambda_optimizer, epoch, prior_means, prior_sigmas, max_error=0.01)
+
     if epoch % 1 == 0:
         train_eval_str = eval_noisy(
             model, train_loader, prior_means, prior_sigmas, "Train", args.ntrain)

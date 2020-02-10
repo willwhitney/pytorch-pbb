@@ -131,7 +131,7 @@ class Net(nn.Module):
         return [p for i, p in enumerate(self.parameters()) if i % 2 == 0]
 
     def get_sigmas(self):
-        return [torch.pow(torch.exp(p), 1/2) for i, p in enumerate(self.parameters()) if i % 2 == 1]
+        return [F.softplus(p) for i, p in enumerate(self.parameters()) if i % 2 == 1]
 
 
 """# Utils"""
