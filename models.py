@@ -266,3 +266,21 @@ class SupervisedReprNet(nn.Module):
     @property
     def device(self):
         return next(self.parameters()).device
+
+
+class LinearNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.repr = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(784, 10)
+        )
+
+    def forward(self, x):
+        x = self.repr(x)
+        output = F.log_softmax(x, dim=1)
+        return output
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
