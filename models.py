@@ -89,6 +89,30 @@ class GaussianLinear(nn.Module):
         return [self.weight.sigma, self.bias.sigma]
 
 
+# class InitPriorGaussianLinear(GaussianLinear):
+#     def __init__(self, in_features, out_features):
+#         super().__init__(in_features, out_features, 1.0)
+#         self.in_features = in_features
+#         self.out_features = out_features
+
+#         # Weight parameters
+#         sigma_weights = 1 / np.sqrt(in_features)
+#         threshold = 2 * sigma_weights
+#         init_rho = np.log(np.exp(sigma_weights) - 1.0)
+
+#         # mu_tensor = torch.Tensor(out_features, in_features).normal_(0, sigma_weights)
+#         mu_tensor = torch.zeros(out_features, in_features)
+#         trunc_normal_(mu_tensor, 0, sigma_weights, -threshold, threshold)
+#         self.weight_mu = nn.Parameter(mu_tensor)
+#         self.weight_rho = nn.Parameter(torch.ones_like(self.weight_mu) * init_rho)
+#         self.weight = Gaussian(self.weight_mu, self.weight_rho)
+
+#         # Bias parameters
+#         self.bias_mu = nn.Parameter(torch.zeros(out_features))
+#         self.bias_rho = nn.Parameter(torch.ones_like(self.bias_mu) * init_rho)
+#         self.bias = Gaussian(self.bias_mu, self.bias_rho)
+
+
 class PerSampleGaussianLinear(nn.Module):
     def __init__(self, in_features, out_features, init_sigma):
         super().__init__()
@@ -129,7 +153,7 @@ class PerSampleGaussianLinear(nn.Module):
 
 
 class NoisyNet(nn.Module):
-    def __init__(self, init_sigma, clipping='tanh', per_sample=False,
+    def __init__(self, init_sigma=3e-2, clipping='tanh', per_sample=False, init_prior=False,
                  PMIN=1e-3, n_inputs=784, n_outputs=10):
         super().__init__()
         self.clipping = clipping
@@ -139,6 +163,11 @@ class NoisyNet(nn.Module):
             self.l2 = PerSampleGaussianLinear(600, 600, init_sigma)
             self.l3 = PerSampleGaussianLinear(600, 600, init_sigma)
             self.lout = PerSampleGaussianLinear(600, n_outputs, init_sigma)
+        # elif init_prior:
+        #     self.l1 = InitPriorGaussianLinear(n_inputs, 600)
+        #     self.l2 = InitPriorGaussianLinear(600, 600)
+        #     self.l3 = InitPriorGaussianLinear(600, 600)
+        #     self.lout = InitPriorGaussianLinear(600, n_outputs)
         else:
             self.l1 = GaussianLinear(n_inputs, 600, init_sigma)
             self.l2 = GaussianLinear(600, 600, init_sigma)
@@ -280,6 +309,27 @@ class LinearNet(nn.Module):
         x = self.repr(x)
         output = F.log_softmax(x, dim=1)
         return output
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
+
+
+class DeepPredictorNet(nn.Module):
+    def __init__(self, n_inputs=784, n_outputs=10):
+        super().__init__()
+        self.body = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(n_inputs, 600),
+            nn.ReLU(),
+            nn.Linear(600, 600),
+            nn.ReLU(),
+            nn.Linear(600, 600),
+            nn.ReLU(),
+            nn.Linear(600, n_outputs))
+
+    def forward(self, x):
+        return F.log_softmax(self.body(x), dim=1)
 
     @property
     def device(self):

@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import Dataset
 import numpy as np
+import math
 
 
 class SpiralsDataset(Dataset):
@@ -32,7 +33,7 @@ class SpiralsDataset(Dataset):
         ks = torch.zeros(len(xs))
         dists = torch.ones(len(xs)) * 10000
         for i, (r, theta) in enumerate(zip(rs, thetas)):
-            for k in range(-1, 2 * self.rotations):
+            for k in range(-1, math.ceil(2 * self.rotations + 1e-5)):
                 dist = (k * np.pi + theta - r).abs()
                 if dist < dists[i]:
                     dists[i] = dist
