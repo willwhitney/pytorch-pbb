@@ -298,11 +298,11 @@ class SupervisedReprNet(nn.Module):
 
 
 class LinearNet(nn.Module):
-    def __init__(self):
+    def __init__(self, input_dim=784, output_dim=10):
         super().__init__()
         self.repr = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(784, 10)
+            nn.Linear(input_dim, output_dim)
         )
 
     def forward(self, x):
@@ -330,6 +330,25 @@ class DeepPredictorNet(nn.Module):
 
     def forward(self, x):
         return F.log_softmax(self.body(x), dim=1)
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
+
+
+class SmallReprNet(nn.Module):
+    def __init__(self, n_inputs=784, n_outputs=784):
+        super().__init__()
+        hidden_dim = max(n_outputs, 600)
+        self.body = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(n_inputs, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, n_outputs),
+        )
+
+    def forward(self, x):
+        return self.body(x)
 
     @property
     def device(self):

@@ -13,6 +13,10 @@ class DatasetWrapper(Dataset):
     def __len__(self):
         return len(self.dataset)
 
+    @property
+    def classes(self):
+        return self.dataset.classes
+
 
 class DatasetCache(DatasetWrapper):
     def __init__(self, dataset):

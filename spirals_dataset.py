@@ -18,6 +18,7 @@ class SpiralsDataset(Dataset):
         ys = rs * signs * torch.sin(thetas) + torch.randn(n_samples) * noise_std
         self.points = torch.stack([xs, ys], axis=1)
         self.labels = (signs > 0).long()
+        self.classes = ['0', '1']
 
     def __getitem__(self, index):
         return self.points[index], self.labels[index]
