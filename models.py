@@ -279,16 +279,77 @@ class SupervisedReprNet(nn.Module):
             nn.Conv2d(32, 64, 3, 1),
             nn.ReLU(),
             nn.MaxPool2d(2),
-            nn.Dropout2d(0.25),
+            # nn.Dropout2d(0.25),
             nn.Flatten(),
             nn.Linear(1600, 784)
         )
-        self.dropout2 = nn.Dropout2d(0.5)
+        # self.dropout2 = nn.Dropout2d(0.5)
         self.fc2 = nn.Linear(784, 10)
 
     def forward(self, x):
-        x = self.repr(x)
+        x = F.relu(self.repr(x))
         x = self.fc2(x)
+        output = F.log_softmax(x, dim=1)
+        return output
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
+
+
+class BottleneckSupervisedReprNet(nn.Module):
+    def __init__(self, bottleneck_width=2):
+        super().__init__()
+        self.repr = nn.Sequential(
+            nn.Conv2d(1, 32, 3, 1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, 3, 1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            # nn.Dropout2d(0.25),
+            nn.Flatten(),
+            nn.Linear(1600, bottleneck_width),
+        )
+        # self.dropout2 = nn.Dropout2d(0.5)
+        self.fc2 = nn.Linear(bottleneck_width, 10)
+
+    def forward(self, x):
+        x = F.relu(self.repr(x))
+        x = self.fc2(x)
+        output = F.log_softmax(x, dim=1)
+        return output
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
+
+
+class LevelBottleneckSupervisedReprNet(nn.Module):
+    def __init__(self, level, bottleneck_width):
+        super().__init__()
+        self.blocks = [
+            [nn.Conv2d(1, 16, 3, 1),
+             nn.ReLU(),
+             nn.MaxPool2d(2), ],
+            [nn.Conv2d(16, 32, 3, 1),
+             nn.ReLU(),
+             nn.MaxPool2d(2), ],
+            [nn.Flatten(),
+             nn.Linear(800, bottleneck_width),
+             nn.ReLU(), ],
+        ]
+        # import ipdb; ipdb.set_trace()
+        self.repr = nn.Sequential(*[l for block in self.blocks[:level] for l in block])
+
+        self.head = nn.Sequential(
+            *[l for block in self.blocks[level:] for l in block],
+            nn.Linear(bottleneck_width, 10),
+        )
+
+    def forward(self, x):
+        x = self.repr(x)
+        x = self.head(x)
         output = F.log_softmax(x, dim=1)
         return output
 
